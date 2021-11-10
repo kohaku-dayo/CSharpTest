@@ -3,16 +3,11 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Threading;
 using System.Timers;
 using Timer = System.Timers.Timer;
 
-namespace UnityCycle
+namespace UniEx
 {
-    /// <summary>
-    /// Esc = プログラム　一時停止 / 再開
-    /// Tab = プログラム　正常終了
-    /// </summary>
     public class UniCycle
     {
         /// <summary>
@@ -38,11 +33,9 @@ namespace UnityCycle
         /// <summary>
         /// 毎秒実行されます。
         /// </summary>
-        public virtual void FixedUpdate() => noneExecutable();
-        /// <summary>
-        /// 毎フレーム実行されます。(Updateより遅い)
-        /// </summary>
+        /// 
         public virtual void LateUpdate() => noneExecutable();
+        public virtual void FixedUpdate() => noneExecutable();
 
         /// <summary>
         /// 何も実行しない関数です。
@@ -83,14 +76,15 @@ namespace UnityCycle
             }
 
             #endregion
-
+            // Invokeの為に別スレッドで実行させたが、よくわからないから保留。
+            // 無くても特に変わりは無いのであっても意味はないです。
             AwakeOrder();
             #region Awake
 
             void AwakeOrder()
             {
                 var tasks = new List<Task>();
-                foreach(var _uInstance in UniInstance)
+                foreach (var _uInstance in UniInstance)
                 {
                     if (IsOverrideMethod(_uInstance.Key, "Awake"))
                     {
@@ -112,9 +106,9 @@ namespace UnityCycle
 
             void StartOrder()
             {
-                foreach(var _uInstance in UniInstance)
+                foreach (var _uInstance in UniInstance)
                 {
-                    if(IsOverrideMethod(_uInstance.Key, "Start"))
+                    if (IsOverrideMethod(_uInstance.Key, "Start"))
                     {
                         if (_uInstance.Value.doLog) Debug.Log($"{_uInstance.Key.Name} -> Start Executed...");
                         _ = Task.Run(() => _uInstance.Value.Start());
@@ -127,13 +121,15 @@ namespace UnityCycle
             FixedUpdateOrder();
             #region FixedUpdate
 
-            void FixedUpdateOrder(){
+            void FixedUpdateOrder()
+            {
                 foreach (var _uInstance in UniInstance)
                 {
                     if (IsOverrideMethod(_uInstance.Key, "FixedUpdate"))
                     {
                         if (_uInstance.Value.doLog) Debug.Log($"{_uInstance.Key.Name} -> FixedUpdate Execute Started...");
-                        var timer = new Timer() {
+                        var timer = new Timer()
+                        {
                             Interval = 1000 * 0.02,
                             AutoReset = true,
                             Enabled = true
@@ -153,9 +149,10 @@ namespace UnityCycle
             // Update とLateUpdateのイベント登録
             void UpdatesOrder()
             {
+                //
                 List<Action> UpdateDelegates = new List<Action>();
                 List<Action> LateUpdateDelegates = new List<Action>();
-                foreach(var _uInstance in UniInstance)
+                foreach (var _uInstance in UniInstance)
                 {
                     if (IsOverrideMethod(_uInstance.Key, "Update"))
                         UpdateDelegates.Add(
@@ -168,63 +165,25 @@ namespace UnityCycle
                 }
                 var timer = new Timer()
                 {
-                    Interval = 1000/60, // Unityに合わせて60fpsにしてます。
+                    Interval = 1000 / 60, // Unityに合わせて60fpsにしてます。
                     AutoReset = true,
                     Enabled = true
                 };
 
-                //if (_uInstance.Value.doLog) Debug.Log($"{_uInstance.Key.Name} -> Update Execute Started...");
                 var combined = (Action)Delegate.Combine((UpdateDelegates.Concat(LateUpdateDelegates)).ToArray());
-                timer.Elapsed += new ElapsedEventHandler(
-                    (sender, e) => { combined(); });
-                updateTimers.Add(timer);
-
-            }
-
-            #endregion
-
-
-            #region Commands
-
-            while (true)
-            {
-                switch (Console.ReadKey().Key)
+                if (combined != null)
                 {
-                    // 一時停止
-                    case ConsoleKey.Escape:
-                        foreach (var tt in updateTimers)
-                        {
-                            if (tt.Enabled)
-                                tt.Stop();
-                            else
-                                tt.Start();
-                        }
-                        break;
-                    // 正常終了
-                    case ConsoleKey.Tab:
-                        BeforeTermination();
-                        return;
+                    timer.Elapsed += new ElapsedEventHandler(
+                        (sender, e) => { combined(); });
+                    updateTimers.Add(timer);
                 }
             }
 
             #endregion
 
-            #region Time Dispose
-            void BeforeTermination()
-            {
-                timeDisposer(updateTimers.ToArray());
-                timeDisposer(fixedUpdateTimers.ToArray());
-                void timeDisposer(Timer[] timers)
-                {
-                    foreach (var tt in timers)
-                    {
-                        tt.Enabled = false;
-                        tt.Dispose();
-                    }
-                }
-            }
-
-            #endregion
+            // 入力待ち処理
+            var debug = new Debug();
+            while (true) debug.Read();
 
             bool IsOverrideMethod(Type type, string methodName)
             {
@@ -238,10 +197,5 @@ namespace UnityCycle
     class TimePrint
     {
         public static string Current => DateTime.Now.ToString("HH:mm:ss");
-    }
-
-    public class Debug
-    {
-        public static void Log(string value) => Console.WriteLine($"[{TimePrint.Current}] {value}");
     }
 }
